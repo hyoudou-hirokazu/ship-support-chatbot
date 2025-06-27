@@ -30,8 +30,9 @@ app = Flask(__name__)
 # load_dotenv()
 
 # 環境変数からLINEとGeminiのAPIキーを取得
-CHANNEL_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
-CHANNEL_SECRET = os.getenv('CHANNEL_SECRET')
+# Renderに設定されている環境変数名に合わせて修正
+CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # 環境変数が設定されているか確認
