@@ -1,7 +1,7 @@
 import os
 import logging
 from flask import Flask, request, abort
-from dotenv import load_dotenv
+# from dotenv import load_dotenv # Renderでは環境変数が自動的に設定されるため、この行はコメントアウト
 import datetime
 # import time # 応答性向上のため、強制的な遅延処理は削除
 import random
@@ -26,8 +26,8 @@ from google.generativeai.types import HarmCategory, HarmBlockThreshold
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 app = Flask(__name__)
 
-# .envファイルから環境変数を読み込む（Renderでは不要だが、ローカル実行時のために残しておく）
-load_dotenv()
+# .envファイルから環境変数を読み込む（Renderでは不要だが、ローカル実行時のためにコメントアウト）
+# load_dotenv()
 
 # 環境変数からLINEとGeminiのAPIキーを取得
 CHANNEL_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
