@@ -1,5 +1,5 @@
 Flask==2.3.3
-line-bot-sdk==3.8.0 # LineBotApiErrorのImportErrorを解決するため、バージョンを3.8.0に固定
+line-bot-sdk # バージョン指定を外し、最新の安定版（v3系）をインストール
 google-generativeai==0.5.0
 python-dotenv
 gunicorn
