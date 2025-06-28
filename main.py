@@ -11,7 +11,8 @@ from linebot.v3.webhook import WebhookHandler
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest
 from linebot.v3.messaging import TextMessage as LineReplyTextMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
-from linebot.v3.exceptions import InvalidSignatureError, LineBotApiError # LineBotApiErrorを追加
+# LineBotApiErrorのインポートパスをlinebot.exceptionsに変更
+from linebot.exceptions import InvalidSignatureError, LineBotApiError # LineBotApiErrorのパスを修正
 
 # 署名検証のためのライブラリをインポート (LINE Bot SDKが内部で処理するため通常は不要だが、デバッグ用として残す)
 import hmac
