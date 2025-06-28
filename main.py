@@ -11,7 +11,7 @@ from linebot.v3.webhook import WebhookHandler
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest
 from linebot.v3.messaging import TextMessage as LineReplyTextMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
-from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.exceptions import InvalidSignatureError, LineBotApiError # LineBotApiErrorを追加
 
 # 署名検証のためのライブラリをインポート (LINE Bot SDKが内部で処理するため通常は不要だが、デバッグ用として残す)
 import hmac
@@ -93,17 +93,13 @@ SHIP_SUPPORT_SYSTEM_PROMPT = """
 より詳細な情報をご提供いただけると、回答の精度が高まります。
 
 【質問形式の項目】
-* **【事業所種別】**: {支援領域}
-    例: 就労移行支援、就労定着支援、B型作業所、放課後等デイサービス、グループホーム
+* **【事業所種別】**：{支援領域}（例：就労移行支援、就労定着支援、B型作業所、放課後等デイサービス、グループホームなど）
     どのような事業所の支援についてお困りですか？ (例: 「就労移行について相談です」)
-* **【障害種別】**: {障害名}（障害の特性）
-    例: 発達障害（ASD）、統合失調症、知的障害3度、精神障害2級、身体障害、高次脳、難病
+* **【障害種別】**：{障害名}（障害の特性）（例：発達障害（ASD）、統合失調症、知的障害3度、精神障害2級、身体障害、高次脳、難病など）
     対象となる方の障害の特性（例：統合失調症、知的障害3度、精神障害2級など）を教えていただけますか？ (例: 「発達障害（ASD）の方についてです」)
-* **【利用者の状態】**: {状態・フェーズ}
-    例: 初回面談、不安定、暴言、職場トラブル、家庭問題、就職後定着、体調の波が激しい、他利用者とのトラブル、作業拒否が多い
+* **【利用者の状態】**：{状態・フェーズ}（例：初回面談、不安定、暴言、職場トラブル、家庭問題、就職後定着、体調の波が激しい、他利用者とのトラブル、作業拒否が多いなど）
     利用者の現在の具体的な状態やフェーズはどのような状況でしょうか？ (例: 「最近、情緒が不安定で…」)
-* **【支援者の悩み・相談内容】**: {フリーテキスト入力}
-    例: 報連相が苦手で、実習先との連携に悩んでいます。
+* **【支援者の悩み・相談内容】**：{フリーテキスト入力}（例：報連相が苦手で、実習先との連携に悩んでいます。など）
     具体的にどのような点でお悩みでしょうか？ (例: 「日中活動への参加が難しい利用者への対応について」)
 
 【回答条件】
@@ -120,9 +116,8 @@ SHIP_SUPPORT_SYSTEM_PROMPT = """
 **Gemini APIの無料枠を考慮し、無駄なトークン消費を避けるため、簡潔かつ的確な応答を心がけてください。また、同じような質問の繰り返しは避け、会話の進展を促してください。**
 """
 
-# 初期メッセージ
-# ボット名を「支援メイトBot」に変更
-INITIAL_MESSAGE = "いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n日々の業務や利用者支援でお困りでしたら、気軽にご相談ください。「支援メイトBot」が専門相談員としてサポートさせていただきます。\n\nより的確なアドバイスのため、例えば「事業所種別（例：グループホーム、B型、就労移行など）」や「障害の特性（例：統合失調症、知的障害3度、精神障害2級など）」など、分かる範囲でお知らせいただけますか？"
+# 初期メッセージは動的に生成するため、ここではテンプレートの例として残します
+# INITIAL_MESSAGE = "いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n日々の業務や利用者支援でお困りでしたら、気軽にご相談ください。「支援メイトBot」が専門相談員としてサポートさせていただきます。\n\nより的確なアドバイスのため、例えば「事業所種別」や「障害の特性（例：統合失調症、知的障害3度、精神障害2級など）」など、分かる範囲でお知らせいただけますか？"
 
 # Gemini API利用制限時のメッセージ
 GEMINI_LIMIT_MESSAGE = (
@@ -220,8 +215,30 @@ def handle_message(event):
         }
         app.logger.info(f"Initialized/Reset session for user_id: {user_id}. First message of the day or new user.")
 
-        # 初回メッセージを送信し、このリクエストの処理を終了
-        response_text = INITIAL_MESSAGE
+        # ユーザー名を取得し、初回メッセージをパーソナライズ
+        user_display_name = "SHIP職員" # デフォルト値を「SHIP職員」に変更
+        try:
+            profile_response = line_bot_api.get_profile(user_id)
+            if profile_response and hasattr(profile_response, 'display_name'):
+                user_display_name = profile_response.display_name
+                app.logger.info(f"Fetched display name for user {user_id}: {user_display_name}")
+            else:
+                app.logger.warning(f"Could not get display name for user {user_id}. Profile response: {profile_response}")
+        except LineBotApiError as e: # LINE APIからのエラーを具体的にキャッチ
+            app.logger.error(f"LineBotApiError getting user profile for {user_id}: {e}", exc_info=True)
+            # エラー時もデフォルト名で続行
+        except Exception as e: # その他の予期せぬエラー
+            app.logger.error(f"Unexpected error getting user profile for {user_id}: {e}", exc_info=True)
+            # エラー時もデフォルト名で続行
+
+        # パーソナライズされた初期メッセージを生成
+        personalized_initial_message = (
+            f"{user_display_name}さん、いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n"
+            "日々の業務や利用者支援でお困りでしたら、気軽にご相談ください。「支援メイトBot」が専門相談員としてサポートさせていただきます。\n\n"
+            "より的確なアドバイスのため、例えば「事業所種別」や「障害の特性（例：統合失調症、知的障害3度、精神障害2級など）」など、分かる範囲でお知らせいただけますか？"
+        )
+        response_text = personalized_initial_message
+
         try:
             line_bot_api.reply_message(
                 ReplyMessageRequest(
@@ -229,9 +246,9 @@ def handle_message(event):
                     messages=[LineReplyTextMessage(text=response_text)]
                 )
             )
-            app.logger.info(f"Sent initial message/daily reset message to user {user_id}.")
+            app.logger.info(f"Sent personalized initial message/daily reset message to user {user_id}.")
         except Exception as e:
-            logging.error(f"Error sending initial/reset reply to LINE for user {user_id}: {e}", exc_info=True)
+            logging.error(f"Error sending personalized initial/reset reply to LINE for user {user_id}: {e}", exc_info=True)
         return 'OK' # 初回メッセージ送信後はここで処理を終了。この返信はGeminiを呼び出さない。
 
     # Gemini API利用回数制限のチェック
