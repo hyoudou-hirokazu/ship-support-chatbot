@@ -8,7 +8,6 @@ import threading
 # LINE Bot SDK v3 のインポート
 from linebot.v3.webhook import WebhookHandler
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest
-# from linebot.v3.messaging.models import GetProfileRequest # GetProfileRequestを除外
 from linebot.v3.messaging import TextMessage as LineReplyTextMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
@@ -57,10 +56,10 @@ try:
     gemini_model = genai.GenerativeModel(
         'gemini-2.5-flash-lite-preview-06-17',
         safety_settings={
-            HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_NONE, # 修正箇所
-            HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE, # 修正箇所
-            HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE, # 修正箇所
-            HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE, # 修正箇所
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE, # 修正箇所
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE, # 修正箇所
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE, # 修正箇所
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE, # 修正箇所
         }
     )
     logging.info("Gemini API configured successfully using 'gemini-2.5-flash-lite-preview-06-17' model.")
