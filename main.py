@@ -3,7 +3,7 @@ import logging
 from flask import Flask, request, abort
 import datetime
 import time
-import threading # 非同期処理のためにthreadingをインポート
+import threading
 
 # LINE Bot SDK v3 のインポート
 from linebot.v3.webhook import WebhookHandler
@@ -15,7 +15,7 @@ from linebot.exceptions import InvalidSignatureError, LineBotApiError
 
 # Google Generative AI SDK のインポート
 import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.generativeai.types import HarmCategory, HarmBlockThreshold # ここを修正: HarmBlockBlockThreshold -> HarmBlockThreshold
 
 # ロギング設定
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -57,10 +57,10 @@ try:
     gemini_model = genai.GenerativeModel(
         'gemini-2.5-flash-lite-preview-06-17',
         safety_settings={
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockBlockThreshold.BLOCK_NONE, # 修正: BLOCK_NONEからBLOCK_BLOCKに変更
+            HarmCategory.HARMS_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARMS_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARMS_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARMS_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE, # ここも修正
         }
     )
     logging.info("Gemini API configured successfully using 'gemini-2.5-flash-lite-preview-06-17' model.")
