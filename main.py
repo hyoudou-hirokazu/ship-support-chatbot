@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage, PushMessage
+from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
+from linebot.v3.messaging.models import PushMessage # ここを修正しました
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 import google.generativeai as genai
@@ -49,11 +50,10 @@ try:
     if not model_exists:
         raise Exception("The specified Gemini model 'gemini-2.5-flash-lite-preview-06-17' is not available.")
 
-    # safety_settings の修正
+    # safety_settings の修正 (これは以前に修正済みですが、念のため含めます)
     model = genai.GenerativeModel(
         'gemini-2.5-flash-lite-preview-06-17',
         safety_settings={
-            # ここを修正
             HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
             HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
             HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
