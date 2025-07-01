@@ -8,8 +8,9 @@ from linebot.v3.exceptions import InvalidSignatureError
 
 # ★★★ 最重要確認ポイント: この行が完全に削除されていることを確認してください ★★★
 # from linebot.v3.messaging.models import PushMessage 
+# 上記の行がmain.pyファイルに存在しないことを再度、確認してください。
 
-# 必要なモジュールのみをインポート
+# 必要なモジュールのみをインポートします
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -44,10 +45,10 @@ configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 # Gemini APIの初期化
 try:
     genai.configure(api_key=GEMINI_API_KEY)
-
-    # ★★★ モデル名を 'gemini-1.5-flash' に変更 ★★★
-    # もしこれで動作しない場合、APIキー自体に問題がある可能性が高くなります。
-    GEMINI_MODEL_NAME = 'gemini-1.5-flash' 
+    
+    # ★★★ ここを修正: Google AI Studioで確認できたモデル名に合わせます ★★★
+    # Gemini 2.5 Flash-Lite Preview 06-17 が利用可能とのことなので、これを使用します。
+    GEMINI_MODEL_NAME = 'gemini-2.5-flash-lite-preview-06-17' 
 
     model_exists = False
     for m in genai.list_models():
