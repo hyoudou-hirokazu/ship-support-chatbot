@@ -6,8 +6,10 @@ from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 
-# ★★★ 最重要: PushMessage のインポート行を完全に削除しました ★★★
-# コード内で現在 PushMessage を使っていないため、この行は不要です。
+# ★★★ 最重要確認ポイント: この行が完全に削除されていることを確認してください ★★★
+# from linebot.v3.messaging.models import PushMessage 
+
+# 必要なモジュールのみをインポート
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -43,10 +45,9 @@ configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 try:
     genai.configure(api_key=GEMINI_API_KEY)
 
-    # ★★★ ここを修正: より一般的な安定版モデルに一時的に変更を推奨します ★★★
-    # 現在のエラーログを見る限り、特定のモデルアクセスが問題の可能性があります。
-    # まずは 'gemini-1.5-flash' で試してみてください。
-    GEMINI_MODEL_NAME = 'gemini-1.5-flash' # もしくは 'gemini-1.0-pro' など
+    # ★★★ モデル名を 'gemini-1.5-flash' に変更 ★★★
+    # もしこれで動作しない場合、APIキー自体に問題がある可能性が高くなります。
+    GEMINI_MODEL_NAME = 'gemini-1.5-flash' 
 
     model_exists = False
     for m in genai.list_models():
@@ -56,14 +57,14 @@ try:
     if not model_exists:
         raise Exception(f"The specified Gemini model '{GEMINI_MODEL_NAME}' is not available for your API key/region.")
 
-    # ★★★ safety_settings の修正: HarmCategory の属性名から 'HARM_CATEGORY_' プレフィックスを削除 ★★★
+    # safety_settings の修正は前回で完了しているはずですが、念のため確認
     model = genai.GenerativeModel(
         GEMINI_MODEL_NAME,
         safety_settings={
-            HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_NONE, # 修正
-            HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE, # 修正
-            HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE, # 修正
-            HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE, # 修正
+            HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
         }
     )
     chat = model.start_chat(history=[])
