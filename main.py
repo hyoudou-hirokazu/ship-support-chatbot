@@ -22,23 +22,22 @@ app = Flask(__name__)
 
 # 環境変数からLINEとGeminiのAPIキーを取得
 CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
+CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET') # 環境変数名をLINE_CHANNEL_SECRETに統一
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # 環境変数が設定されているか確認
 if not CHANNEL_ACCESS_TOKEN:
-    logging.critical("CHANNEL_ACCESS_TOKEN is not set in environment variables.")
-    raise ValueError("CHANNEL_ACCESS_TOKEN is not set. Please set it in Render Environment Variables.")
+    logging.critical("LINE_CHANNEL_ACCESS_TOKEN is not set in environment variables.")
+    raise ValueError("LINE_CHANNEL_ACCESS_TOKEN is not set. Please set it in Render Environment Variables.")
 if not CHANNEL_SECRET:
-    logging.critical("CHANNEL_SECRET is not set in environment variables.")
-    raise ValueError("CHANNEL_SECRET is not set. Please set it in Render Environment Variables.")
+    logging.critical("LINE_CHANNEL_SECRET is not set in environment variables.")
+    raise ValueError("LINE_CHANNEL_SECRET is not set. Please set it in Render Environment Variables.")
 if not GEMINI_API_KEY:
     logging.critical("GEMINI_API_KEY is not set in environment variables.")
     raise ValueError("GEMINI_API_KEY is not set. Please set it in Render Environment Variables.")
 if not os.getenv('PORT'):
     logging.critical("PORT environment variable is not set by Render. This is unexpected for a Web Service.")
     raise ValueError("PORT environment variable is not set. Ensure this is deployed on a platform like Render.")
-
 
 # LINE Messaging API v3 の設定
 try:
@@ -47,7 +46,7 @@ try:
     handler = WebhookHandler(CHANNEL_SECRET)
     logging.info("LINE Bot SDK configured successfully.")
 except Exception as e:
-    logging.critical(f"Failed to configure LINE Bot SDK: {e}. Please check CHANNEL_ACCESS_TOKEN and CHANNEL_SECRET.")
+    logging.critical(f"Failed to configure LINE Bot SDK: {e}. Please check LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_SECRET.")
     raise Exception(f"LINE Bot SDK configuration failed: {e}")
 
 # Gemini API の設定
@@ -56,10 +55,10 @@ try:
     gemini_model = genai.GenerativeModel(
         'gemini-2.5-flash-lite-preview-06-17',
         safety_settings={
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE, # ここを修正
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE, # ここを修正
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE, # ここを修正
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE, # ここを修正
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
         }
     )
     logging.info("Gemini API configured successfully using 'gemini-2.5-flash-lite-preview-06-17' model.")
@@ -70,44 +69,32 @@ except Exception as e:
 # --- チャットボット関連の設定 ---
 MAX_GEMINI_REQUESTS_PER_DAY = 20
 
-# プロンプトを社会福祉法人SHIPの支援者向けサポートAIに調整
-SHIP_SUPPORT_SYSTEM_PROMPT = """
-あなたは障害福祉分野の専門相談員「支援メイトBot」です。
-支援者が適切な判断と対応できるよう、心理的・制度的・現場実践的なアドバイスを簡潔に提供してください。
-
-支援者の質問は以下の情報を含む可能性があります。提供された範囲で助言し、不足情報があれば質問を促してください。
-【質問項目】
-* **【事業所種別】**:{支援領域}。例: 就労移行支援、B型作業所など。
-* **【障害種別】:{障害名}（特性）。例: 発達障害(ASD), 統合失調症など。
-* **【利用者の状態】**:{状態・フェーズ}。例: 不安定, 職場トラブルなど。
-* **【支援者の悩み・相談内容】**:{フリーテキスト}。例: 報連相が苦手など。
-
-【回答条件】
-* 不完全な情報でも仮アドバイスを提供。
-* 不足情報があれば、ユーザーが答えやすいよう具体的に質問を促す。
-* 支援者の心理に配慮し、寄り添うトーン。
-* 具体的な対応策を2〜3案、簡潔に提示。
-* 必要に応じて関連制度、研修、専門資格を紹介。
-* 専門用語は避け、分かりやすい言葉。
-* 返答は簡潔で適切な長さ。
-* 各応答の最後に、次の質問やアクションを促す言葉を必ず含める。
-* 個別判断、医療・法律アドバイスは行わない。緊急時や詳細な情報が必要な場合は、「この内容については、より詳細な情報が必要なため、各事業所の担当者または法人本部にお問い合わせください。」と案内し、担当部署への問い合わせを促す。
-* 応答は簡潔に、トークン消費を抑え、会話の発展を促すこと。
+# プロンプトの簡潔化
+MANAGEMENT_SUPPORT_SYSTEM_PROMPT = """
+あなたは障害福祉施設の管理職向けAIサポート「役職者お悩みサポート」です。
+組織運営、人材育成、利用者支援、事業展開、法令遵守に関する悩みに、傾聴と共感を持ち、実践的かつ具体的なアドバイスを端的に提供してください。
+ユーザーの思考を深掘りし、強みと行動を促すオープンな質問を含めてください。
+回答の最後に、建設的な質問を必ず含めてください。
+専門用語は避け、分かりやすい言葉で説明してください。
+AIの限界を認識し、必要に応じ専門家への相談を促してください。
+応答は簡潔に、トークン消費を抑え、会話の発展を促すこと。
 """
 
-# ユーザー名を考慮しない汎用的な初期メッセージに変更
-INITIAL_MESSAGE_SUPPORT_BOT = (
-    "いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n"
-    "日々の業務や利用者支援でお困りでしたら、気軽にご相談ください。「支援メイトBot」が専門相談員としてサポートさせていただきます。\n\n"
-    "より的確なアドバイスのため、例えば「事業所種別」や「障害の特性（例：統合失調症、知的障害3度、精神障害2級など）」など、分かる範囲でお知らせいただけますか？"
-)
+# ユーザー名を考慮しない汎用的な初期メッセージ
+INITIAL_MESSAGE_MANAGEMENT_BOT = """
+「役職者お悩みサポート」へようこそ。
+日々の事業所運営、職員の育成、利用者様への支援、多岐にわたる管理職のお仕事、本当にお疲れ様です。
+どんな些細なことでも構いませんので、今お悩みのことを気軽にご相談ください。
+私が、あなたの「相談役」として、最適な方向性を見つけるお手伝いをいたします。
+"""
 
-# Gemini API利用制限時のメッセージ
-GEMINI_LIMIT_MESSAGE = (
-    "申し訳ありません、本日のAIサポートのご利用回数の上限に達しました。\n"
-    "明日またお話できますので、その時までお待ちください。\n\n"
-    "もし緊急を要するご質問や、詳細な情報が必要な場合は、各事業所の担当者または法人本部にお問い合わせください。"
-)
+GEMINI_LIMIT_MESSAGE = """
+申し訳ありません、本日の「役職者お悩みサポート」のご利用回数の上限に達しました。\n
+日々の激務の中、ご活用いただきありがとうございます。\n
+明日またお話しできますので、その時まで少しお仕事から離れて、ご自身の心身を労わってくださいね。\n
+もし緊急を要するご質問や、詳細な情報が必要な場合は、法人本部や関係部署、関連機関にご相談ください。\n
+明日、またお会いできることを楽しみにしております。
+"""
 
 MAX_CONTEXT_TURNS = 6
 
@@ -141,8 +128,9 @@ def callback():
     app.logger.info(f"  X-Line-Signature: {signature}")
 
     try:
-        handler.handle(body, signature)
-        app.logger.info(f"[{time.time() - start_callback_time:.3f}s] Webhook handled successfully by SDK.")
+        threading.Thread(target=handler.handle, args=(body, signature)).start()
+        app.logger.info(f"[{time.time() - start_callback_time:.3f}s] Webhook handling delegated to a thread. Returning OK immediately.")
+        return 'OK'
     except InvalidSignatureError:
         app.logger.error(f"[{time.time() - start_callback_time:.3f}s] !!! SDK detected Invalid signature !!!")
         app.logger.error("  This typically means CHANNEL_SECRET in Render does not match LINE Developers.")
@@ -151,8 +139,6 @@ def callback():
         logging.critical(f"[{time.time() - start_callback_time:.3f}s] Unhandled error during webhook processing by SDK: {e}", exc_info=True)
         abort(500)
 
-    app.logger.info(f"[{time.time() - start_callback_time:.3f}s] Total callback processing time.")
-    return 'OK'
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
@@ -174,9 +160,9 @@ def handle_message(event):
                 'history': [],
                 'request_count': 0,
                 'last_request_date': current_date,
-                'display_name': "職員" # GetProfileRequestを使用しないため、汎用名を設定
+                'display_name': "管理者" # GetProfileRequestを使用しないため、汎用名を設定
             }
-            response_text = INITIAL_MESSAGE_SUPPORT_BOT
+            response_text = INITIAL_MESSAGE_MANAGEMENT_BOT
             messages_to_send.append(LineReplyTextMessage(text=response_text))
             deferred_reply(reply_token, messages_to_send, user_id, start_handle_time)
             app.logger.info(f"[{time.time() - start_handle_time:.3f}s] handle_message finished for initial/reset flow (deferred reply).")
@@ -191,8 +177,8 @@ def handle_message(event):
             return
 
         chat_history_for_gemini = [
-            {'role': 'user', 'parts': [{'text': SHIP_SUPPORT_SYSTEM_PROMPT}]},
-            {'role': 'model', 'parts': [{'text': "はい、承知いたしました。支援メイトBotとして、ご質問にお答えします。"}]}
+            {'role': 'user', 'parts': [{'text': MANAGEMENT_SUPPORT_SYSTEM_PROMPT}]},
+            {'role': 'model', 'parts': [{'text': "はい、承知いたしました。管理職の皆様のお力になれるよう、「役職者お悩みサポート」が心を込めてお話を伺います。"}]}
         ]
 
         start_index = max(0, len(user_sessions[user_id]['history']) - MAX_CONTEXT_TURNS * 2)
@@ -238,7 +224,8 @@ def handle_message(event):
 
     threading.Thread(target=process_and_reply_async).start()
     app.logger.info(f"[{time.time() - start_handle_time:.3f}s] handle_message immediately returned OK for user {user_id}.")
-    return 'OK'
+    # この関数はhandler.addによって呼び出されるため、直接 'OK' を返す必要はありません。
+    # Webhookハンドラが 'OK' を返さない場合、Flaskのルートハンドラが処理します。
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
