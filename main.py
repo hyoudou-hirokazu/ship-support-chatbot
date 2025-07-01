@@ -53,6 +53,7 @@ try:
     model = genai.GenerativeModel(
         'gemini-2.5-flash-lite-preview-06-17',
         safety_settings={
+            # ここを修正
             HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
             HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
             HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
@@ -98,19 +99,6 @@ def handle_message(event):
 
         # 初期メッセージの処理
         if user_message == "相談開始":
-            # ユーザーのプロフィール情報を取得する場合（非推奨、v3ではGetProfileRequestはなし）
-            # if chat and hasattr(line_bot_api, 'get_profile'):
-            #     try:
-            #         profile = line_bot_api.get_profile(user_id)
-            #         display_name = profile.display_name
-            #         first_message = f"{display_name}さん、いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n日々の業務や利用者支援でお困りでしたら、お気軽にご相談ください。\n「支援メイトBot」が専門相談員としてサポートさせていただきます。"
-            #         # より具体的なアドバイスのための情報収集
-            #         first_message += "\nより具体的なアドバイスのため、例えば「事業所種別」や「障害の特性（例：統合失調症、知的障害３度、精神障害２級など）」など、分かる範囲でお知らせいただけますか？"
-            #     except Exception as e:
-            #         app.logger.error(f"Error getting profile: {e}")
-            #         first_message = "いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n日々の業務や利用者支援でお困りでしたら、お気軽にご相談ください。\n「支援メイトBot」が専門相談員としてサポートさせていただきます。"
-            #         first_message += "\nより具体的なアドバイスのため、例えば「事業所種別」や「障害の特性（例：統合失調症、知的障害３度、精神障害２級など）」など、分かる範囲でお知らせいただけますか？"
-            # else:
             first_message = "いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n日々の業務や利用者支援でお困りでしたら、お気軽にご相談ください。\n「支援メイトBot」が専門相談員としてサポートさせていただきます。"
             first_message += "\nより具体的なアドバイスのため、例えば「事業所種別」や「障害の特性（例：統合失調症、知的障害３度、精神障害２級など）」など、分かる範囲でお知らせいただけますか？"
 
@@ -161,4 +149,3 @@ def handle_message(event):
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
