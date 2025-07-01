@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
+# PushMessage のインポート行を完全に削除します
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
-# ここをさらに修正: PushMessage は linebot.v3.messaging.models.message モジュールからインポートします
-from linebot.v3.messaging.models.message import PushMessage # このように修正
+# from linebot.v3.messaging.models.message import PushMessage # この行を削除
 
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
