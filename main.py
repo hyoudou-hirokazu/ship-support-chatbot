@@ -5,13 +5,14 @@ from dotenv import load_dotenv
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
-# PushMessage のインポート行を完全に削除します。
-# コード内で使用していない限り、不要です。
+# ★★★ ここが最も重要: PushMessage のインポート行を完全に削除します ★★★
+# コード内で現在 PushMessage を使っていないため、この行は不要です。
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 import google.generativeai as genai
+# HarmBlockThreshold もインポートされていることを確認
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 # .env ファイルから環境変数をロード
@@ -42,9 +43,12 @@ configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     
-    # Geminiモデル名の確認 (他のボットで動いているとのことなので、ここ自体は問題ないはずです)
-    GEMINI_MODEL_NAME = 'gemini-1.5-flash' # またはあなたが使っている正確なモデル名
-    
+    # ★★★ ここを修正: より一般的な安定版モデルに一時的に変更を推奨します ★★★
+    # もし 'gemini-2.5-flash-lite-preview-06-17' が他のボットで動いているなら、
+    # そのモデル名で試しても良いですが、一旦 'gemini-1.5-flash' などで試すことで、
+    # モデルアクセスが原因かどうかを切り分けられます。
+    GEMINI_MODEL_NAME = 'gemini-1.5-flash' # もしくは 'gemini-1.0-pro' など
+
     model_exists = False
     for m in genai.list_models():
         if GEMINI_MODEL_NAME == m.name:
@@ -53,21 +57,20 @@ try:
     if not model_exists:
         raise Exception(f"The specified Gemini model '{GEMINI_MODEL_NAME}' is not available for your API key/region.")
 
-    # safety_settings の修正: HarmCategory の属性名から 'HARM_CATEGORY_' プレフィックスを削除
-    # こちらも他のボットで動いているとのことなので、HarmCategory.HARASSMENT の形式で問題ないはずです
+    # ★★★ safety_settings の修正: HarmCategory の属性名から 'HARM_CATEGORY_' プレフィックスを削除 ★★★
     model = genai.GenerativeModel(
         GEMINI_MODEL_NAME,
         safety_settings={
-            HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-            HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_NONE, # 修正
+            HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE, # 修正
+            HarmCategory.SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE, # 修正
+            HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE, # 修正
         }
     )
     chat = model.start_chat(history=[])
     print(f"Gemini API configured successfully using '{GEMINI_MODEL_NAME}' model.")
 except Exception as e:
-    print(f"CRITICAL: Gemini API configuration failed: {e}. Please check google-generativeai library version in requirements.txt. Also ensure '{GEMINI_MODEL_NAME}' model is available for your API key/region.")
+    print(f"CRITICAL: Gemini API configuration failed: {e}. Please check GEMINI_API_KEY and google-generativeai library version in requirements.txt. Also ensure '{GEMINI_MODEL_NAME}' model is available for your API key/region.")
     chat = None # chatオブジェクトをNoneに設定し、Geminiが使えない状態を示す
 
 @app.route("/callback", methods=['POST'])
