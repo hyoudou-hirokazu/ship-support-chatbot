@@ -5,14 +5,16 @@ from dotenv import load_dotenv
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
-# ★★★ ここが最も重要: PushMessage のインポート行を完全に削除します ★★★
-# コード内で現在 PushMessage を使っていないため、この行は不要です。
+
+# ★★★ 最重要: PushMessage のインポート行を完全に削除しました ★★★
+# 現在のコードでは PushMessage を使用していないため、不要です。
+# 他の linebot.v3.messaging から必要なクラスのみをインポートします。
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 import google.generativeai as genai
-# HarmBlockThreshold もインポートされていることを確認
+# HarmBlockThreshold もここからインポートされていることを確認
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 # .env ファイルから環境変数をロード
@@ -22,7 +24,7 @@ app = Flask(__name__)
 
 # 環境変数の設定
 CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
-CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN') # 環境変数名をLINE_ACCESS_TOKENに変更している場合はLINE_ACCESS_TOKENに修正
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # 環境変数が設定されているか確認
@@ -30,7 +32,7 @@ if CHANNEL_SECRET is None:
     print('Specify LINE_CHANNEL_SECRET as environment variable.')
     sys.exit(1)
 if CHANNEL_ACCESS_TOKEN is None:
-    print('Specify LINE_CHANNEL_ACCESS_TOKEN as environment variable.')
+    print('Specify LINE_CHANNEL_ACCESS_TOKEN as environment variable.') # 環境変数名に合わせてメッセージも修正
     sys.exit(1)
 if GEMINI_API_KEY is None:
     print('Specify GEMINI_API_KEY as environment variable.')
@@ -43,12 +45,10 @@ configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     
-    # ★★★ ここを修正: より一般的な安定版モデルに一時的に変更を推奨します ★★★
-    # もし 'gemini-2.5-flash-lite-preview-06-17' が他のボットで動いているなら、
-    # そのモデル名で試しても良いですが、一旦 'gemini-1.5-flash' などで試すことで、
-    # モデルアクセスが原因かどうかを切り分けられます。
-    GEMINI_MODEL_NAME = 'gemini-1.5-flash' # もしくは 'gemini-1.0-pro' など
-
+    # Geminiモデル名: 他のボットで動作しているとのことなので、このモデル名を使用します。
+    # もしこのモデル名で引き続きエラーが出る場合は、'gemini-1.5-flash'など一般的なモデルを試すことを検討してください。
+    GEMINI_MODEL_NAME = 'gemini-2.5-flash-lite-preview-06-17' 
+    
     model_exists = False
     for m in genai.list_models():
         if GEMINI_MODEL_NAME == m.name:
