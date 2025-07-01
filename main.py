@@ -1,58 +1,56 @@
 import os
-import logging
+import sys
+from dotenv import load_dotenv
+
 from flask import Flask, request, abort
-import datetime
-import time
-import threading
-
-# LINE Bot SDK v3 のインポート
-from linebot.v3.webhook import WebhookHandler
-from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest
-from linebot.v3.messaging import TextMessage as LineReplyTextMessage
+from linebot.v3 import WebhookHandler
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage, PushMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
-from linebot.exceptions import InvalidSignatureError, LineBotApiError
 
-# Google Generative AI SDK のインポート
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
-# ロギング設定
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# .env ファイルから環境変数をロード
+load_dotenv()
+
 app = Flask(__name__)
 
-# 環境変数からLINEとGeminiのAPIキーを取得
+# 環境変数の設定
+CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET') # 環境変数名をLINE_CHANNEL_SECRETに統一
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # 環境変数が設定されているか確認
-if not CHANNEL_ACCESS_TOKEN:
-    logging.critical("LINE_CHANNEL_ACCESS_TOKEN is not set in environment variables.")
-    raise ValueError("LINE_CHANNEL_ACCESS_TOKEN is not set. Please set it in Render Environment Variables.")
-if not CHANNEL_SECRET:
-    logging.critical("LINE_CHANNEL_SECRET is not set in environment variables.")
-    raise ValueError("LINE_CHANNEL_SECRET is not set. Please set it in Render Environment Variables.")
-if not GEMINI_API_KEY:
-    logging.critical("GEMINI_API_KEY is not set in environment variables.")
-    raise ValueError("GEMINI_API_KEY is not set. Please set it in Render Environment Variables.")
-if not os.getenv('PORT'):
-    logging.critical("PORT environment variable is not set by Render. This is unexpected for a Web Service.")
-    raise ValueError("PORT environment variable is not set. Ensure this is deployed on a platform like Render.")
+if CHANNEL_SECRET is None:
+    print('Specify LINE_CHANNEL_SECRET as environment variable.')
+    sys.exit(1)
+if CHANNEL_ACCESS_TOKEN is None:
+    print('Specify LINE_CHANNEL_ACCESS_TOKEN as environment variable.')
+    sys.exit(1)
+if GEMINI_API_KEY is None:
+    print('Specify GEMINI_API_KEY as environment variable.')
+    sys.exit(1)
 
-# LINE Messaging API v3 の設定
-try:
-    configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
-    line_bot_api = MessagingApi(ApiClient(configuration))
-    handler = WebhookHandler(CHANNEL_SECRET)
-    logging.info("LINE Bot SDK configured successfully.")
-except Exception as e:
-    logging.critical(f"Failed to configure LINE Bot SDK: {e}. Please check LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_SECRET.")
-    raise Exception(f"LINE Bot SDK configuration failed: {e}")
+handler = WebhookHandler(CHANNEL_SECRET)
+configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 
-# Gemini API の設定
+# Gemini APIの初期化
+# 例外処理を追加し、APIキーとモデルの可用性を確認
 try:
     genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel(
+    # 使用可能なモデルをリスト表示し、指定したモデルが存在することを確認
+    list_models_response = genai.list_models()
+    model_exists = False
+    for m in list_models_response:
+        if "gemini-2.5-flash-lite-preview-06-17" == m.name:
+            model_exists = True
+            break
+    if not model_exists:
+        raise Exception("The specified Gemini model 'gemini-2.5-flash-lite-preview-06-17' is not available.")
+
+    # safety_settings の修正
+    model = genai.GenerativeModel(
         'gemini-2.5-flash-lite-preview-06-17',
         safety_settings={
             HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
@@ -61,172 +59,106 @@ try:
             HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
         }
     )
-    logging.info("Gemini API configured successfully using 'gemini-2.5-flash-lite-preview-06-17' model.")
+    chat = model.start_chat(history=[])
+    print("Gemini API configured successfully using 'gemini-2.5-flash-lite-preview-06-17' model.")
 except Exception as e:
-    logging.critical(f"Failed to configure Gemini API: {e}. Please check GEMINI_API_KEY and 'google-generativeai' library version in requirements.txt. Also ensure 'gemini-2.5-flash-lite-preview-06-17' model is available for your API Key/Region.")
-    raise Exception(f"Gemini API configuration failed: {e}")
-
-# --- チャットボット関連の設定 ---
-MAX_GEMINI_REQUESTS_PER_DAY = 20
-
-# プロンプトの簡潔化
-MANAGEMENT_SUPPORT_SYSTEM_PROMPT = """
-あなたは障害福祉施設の管理職向けAIサポート「役職者お悩みサポート」です。
-組織運営、人材育成、利用者支援、事業展開、法令遵守に関する悩みに、傾聴と共感を持ち、実践的かつ具体的なアドバイスを端的に提供してください。
-ユーザーの思考を深掘りし、強みと行動を促すオープンな質問を含めてください。
-回答の最後に、建設的な質問を必ず含めてください。
-専門用語は避け、分かりやすい言葉で説明してください。
-AIの限界を認識し、必要に応じ専門家への相談を促してください。
-応答は簡潔に、トークン消費を抑え、会話の発展を促すこと。
-"""
-
-# ユーザー名を考慮しない汎用的な初期メッセージ
-INITIAL_MESSAGE_MANAGEMENT_BOT = """
-「役職者お悩みサポート」へようこそ。
-日々の事業所運営、職員の育成、利用者様への支援、多岐にわたる管理職のお仕事、本当にお疲れ様です。
-どんな些細なことでも構いませんので、今お悩みのことを気軽にご相談ください。
-私が、あなたの「相談役」として、最適な方向性を見つけるお手伝いをいたします。
-"""
-
-GEMINI_LIMIT_MESSAGE = """
-申し訳ありません、本日の「役職者お悩みサポート」のご利用回数の上限に達しました。\n
-日々の激務の中、ご活用いただきありがとうございます。\n
-明日またお話しできますので、その時まで少しお仕事から離れて、ご自身の心身を労わってくださいね。\n
-もし緊急を要するご質問や、詳細な情報が必要な場合は、法人本部や関係部署、関連機関にご相談ください。\n
-明日、またお会いできることを楽しみにしております。
-"""
-
-MAX_CONTEXT_TURNS = 6
-
-user_sessions = {}
-
-# LINEへの返信を非同期で行う関数
-def deferred_reply(reply_token, messages_to_send, user_id, start_time):
-    try:
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=reply_token,
-                messages=messages_to_send
-            )
-        )
-        app.logger.info(f"[{time.time() - start_time:.3f}s] Deferred reply sent to LINE successfully for user {user_id}.")
-    except Exception as e:
-        app.logger.error(f"Error sending deferred reply to LINE for user {user_id}: {e}", exc_info=True)
+    print(f"Exception: Gemini API configuration failed: {e}")
+    # エラーが発生した場合、アプリケーションを終了するか、API呼び出しをスキップするなどの対応
+    # ここでは、続行はするものの、Gemini APIが使えない状態であることを考慮した処理が必要
+    chat = None # chatオブジェクトをNoneに設定し、Geminiが使えない状態を示す
 
 @app.route("/callback", methods=['POST'])
 def callback():
-    start_callback_time = time.time()
-    signature = request.headers.get('X-Line-Signature')
+    signature = request.headers['X-Line-Signature']
+
+    # get request body as text
     body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
 
-    if not signature:
-        app.logger.error(f"[{time.time() - start_callback_time:.3f}s] X-Line-Signature header is missing.")
-        abort(400)
-
-    app.logger.info(f"[{time.time() - start_callback_time:.3f}s] Received Webhook Request.")
-    app.logger.info("  Request body (truncated to 500 chars): " + body[:500])
-    app.logger.info(f"  X-Line-Signature: {signature}")
-
+    # handle webhook body
     try:
-        threading.Thread(target=handler.handle, args=(body, signature)).start()
-        app.logger.info(f"[{time.time() - start_callback_time:.3f}s] Webhook handling delegated to a thread. Returning OK immediately.")
-        return 'OK'
+        handler.handle(body, signature)
     except InvalidSignatureError:
-        app.logger.error(f"[{time.time() - start_callback_time:.3f}s] !!! SDK detected Invalid signature !!!")
-        app.logger.error("  This typically means CHANNEL_SECRET in Render does not match LINE Developers.")
+        app.logger.info("Invalid signature. Please check your channel access token/channel secret.")
         abort(400)
-    except Exception as e:
-        logging.critical(f"[{time.time() - start_callback_time:.3f}s] Unhandled error during webhook processing by SDK: {e}", exc_info=True)
-        abort(500)
 
+    return 'OK'
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    start_handle_time = time.time()
-    user_id = event.source.user_id
-    user_message = event.message.text
-    reply_token = event.reply_token
-    app.logger.info(f"[{time.time() - start_handle_time:.3f}s] handle_message received for user_id: '{user_id}', message: '{user_message}' (Reply Token: {reply_token})")
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
 
-    current_date = datetime.date.today()
+        user_message = event.message.text
+        reply_token = event.reply_token
+        user_id = event.source.user_id
 
-    def process_and_reply_async():
-        messages_to_send = []
-        response_text = "申し訳ありません、現在メッセージを処理できません。しばらくしてからもう一度お試しください。"
+        # LINEのユーザーIDごとにセッションを管理する必要がある場合、ここにロジックを追加
+        # 例: データベースやKVSでユーザーごとのチャット履歴を管理
 
-        if user_id not in user_sessions or user_sessions[user_id]['last_request_date'] != current_date:
-            app.logger.info(f"[{time.time() - start_handle_time:.3f}s] Initializing/Resetting session for user_id: {user_id}. First message of the day or new user.")
-            user_sessions[user_id] = {
-                'history': [],
-                'request_count': 0,
-                'last_request_date': current_date,
-                'display_name': "管理者" # GetProfileRequestを使用しないため、汎用名を設定
-            }
-            response_text = INITIAL_MESSAGE_MANAGEMENT_BOT
-            messages_to_send.append(LineReplyTextMessage(text=response_text))
-            deferred_reply(reply_token, messages_to_send, user_id, start_handle_time)
-            app.logger.info(f"[{time.time() - start_handle_time:.3f}s] handle_message finished for initial/reset flow (deferred reply).")
+        # 初期メッセージの処理
+        if user_message == "相談開始":
+            # ユーザーのプロフィール情報を取得する場合（非推奨、v3ではGetProfileRequestはなし）
+            # if chat and hasattr(line_bot_api, 'get_profile'):
+            #     try:
+            #         profile = line_bot_api.get_profile(user_id)
+            #         display_name = profile.display_name
+            #         first_message = f"{display_name}さん、いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n日々の業務や利用者支援でお困りでしたら、お気軽にご相談ください。\n「支援メイトBot」が専門相談員としてサポートさせていただきます。"
+            #         # より具体的なアドバイスのための情報収集
+            #         first_message += "\nより具体的なアドバイスのため、例えば「事業所種別」や「障害の特性（例：統合失調症、知的障害３度、精神障害２級など）」など、分かる範囲でお知らせいただけますか？"
+            #     except Exception as e:
+            #         app.logger.error(f"Error getting profile: {e}")
+            #         first_message = "いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n日々の業務や利用者支援でお困りでしたら、お気軽にご相談ください。\n「支援メイトBot」が専門相談員としてサポートさせていただきます。"
+            #         first_message += "\nより具体的なアドバイスのため、例えば「事業所種別」や「障害の特性（例：統合失調症、知的障害３度、精神障害２級など）」など、分かる範囲でお知らせいただけますか？"
+            # else:
+            first_message = "いつも利用者様支援に一生懸命取り組んでいただき、ありがとうございます。\n日々の業務や利用者支援でお困りでしたら、お気軽にご相談ください。\n「支援メイトBot」が専門相談員としてサポートさせていただきます。"
+            first_message += "\nより具体的なアドバイスのため、例えば「事業所種別」や「障害の特性（例：統合失調症、知的障害３度、精神障害２級など）」など、分かる範囲でお知らせいただけますか？"
+
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[
+                        TextMessage(text="※その日の最初のメッセージでは、起動のため数分、返答遅延が生じる場合があります。"),
+                        TextMessage(text=first_message)
+                    ]
+                )
+            )
             return
 
-        if user_sessions[user_id]['request_count'] >= MAX_GEMINI_REQUESTS_PER_DAY:
-            response_text = GEMINI_LIMIT_MESSAGE
-            app.logger.warning(f"User {user_id} exceeded daily Gemini request limit ({MAX_GEMINI_REQUESTS_PER_DAY}).")
-            messages_to_send.append(LineReplyTextMessage(text=response_text))
-            deferred_reply(reply_token, messages_to_send, user_id, start_handle_time)
-            app.logger.info(f"[{time.time() - start_handle_time:.3f}s] handle_message finished for limit exceeded flow (deferred reply).")
+        # Gemini APIが初期化されていない場合はエラーメッセージを返す
+        if chat is None:
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[
+                        TextMessage(text="現在、システムに問題が発生しており、AIによる応答ができません。しばらくお待ちください。")
+                    ]
+                )
+            )
             return
-
-        chat_history_for_gemini = [
-            {'role': 'user', 'parts': [{'text': MANAGEMENT_SUPPORT_SYSTEM_PROMPT}]},
-            {'role': 'model', 'parts': [{'text': "はい、承知いたしました。管理職の皆様のお力になれるよう、「役職者お悩みサポート」が心を込めてお話を伺います。"}]}
-        ]
-
-        start_index = max(0, len(user_sessions[user_id]['history']) - MAX_CONTEXT_TURNS * 2)
-        app.logger.debug(f"[{time.time() - start_handle_time:.3f}s] Current history length for user {user_id}: {len(user_sessions[user_id]['history'])}. Taking from index {start_index}.")
-
-        for role, text_content in user_sessions[user_id]['history'][start_index:]:
-            chat_history_for_gemini.append({'role': role, 'parts': [{'text': text_content}]})
-
-        app.logger.debug(f"[{time.time() - start_handle_time:.3f}s] Gemini chat history prepared for user {user_id} (last message: '{user_message}'): {chat_history_for_gemini}")
 
         try:
-            start_gemini_call = time.time()
-            convo = gemini_model.start_chat(history=chat_history_for_gemini)
-            gemini_response = convo.send_message(user_message)
-            end_gemini_call = time.time()
-            app.logger.info(f"[{end_gemini_call - start_gemini_call:.3f}s] Gemini API call completed for user {user_id}.")
+            # Geminiモデルにメッセージを送信し、応答を取得
+            response = chat.send_message(user_message)
+            gemini_response_text = response.text
 
-            if gemini_response and hasattr(gemini_response, 'text'):
-                response_text = gemini_response.text
-            elif isinstance(gemini_response, list) and gemini_response and hasattr(gemini_response[0], 'text'):
-                response_text = gemini_response[0].text
-            else:
-                logging.warning(f"[{time.time() - start_handle_time:.3f}s] Unexpected Gemini response format or no text content: {gemini_response}")
-                response_text = "Geminiからの応答形式が予期せぬものでした。"
-
-            app.logger.info(f"[{time.time() - start_handle_time:.3f}s] Gemini generated response for user {user_id}: '{response_text}'")
-
-            user_sessions[user_id]['history'].append(['user', user_message])
-            user_sessions[user_id]['history'].append(['model', response_text])
-            user_sessions[user_id]['request_count'] += 1
-            user_sessions[user_id]['last_request_date'] = current_date
-            app.logger.info(f"[{time.time() - start_handle_time:.3f}s] User {user_id} - Request count: {user_sessions[user_id]['request_count']}")
-
+            # LINEにGeminiの応答を返信
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[TextMessage(text=gemini_response_text)]
+                )
+            )
         except Exception as e:
-            logging.error(f"[{time.time() - start_handle_time:.3f}s] Error interacting with Gemini API for user {user_id}: {e}", exc_info=True)
-            response_text = "Geminiとの通信中にエラーが発生しました。時間を置いてお試しください。"
-
-        finally:
-            messages_to_send.append(LineReplyTextMessage(text=response_text))
-            deferred_reply(reply_token, messages_to_send, user_id, start_handle_time)
-
-        app.logger.info(f"[{time.time() - start_handle_time:.3f}s] Total process_and_reply_async processing time.")
-
-    threading.Thread(target=process_and_reply_async).start()
-    app.logger.info(f"[{time.time() - start_handle_time:.3f}s] handle_message immediately returned OK for user {user_id}.")
-    # この関数はhandler.addによって呼び出されるため、直接 'OK' を返す必要はありません。
-    # Webhookハンドラが 'OK' を返さない場合、Flaskのルートハンドラが処理します。
+            app.logger.error(f"Error communicating with Gemini API: {e}")
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[TextMessage(text="現在、AIが応答できません。もう一度お試しいただくか、しばらくお待ちください。")]
+                )
+            )
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
