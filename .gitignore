@@ -1,8 +1,0 @@
-# 環境変数ファイル
-.env
-
-# Pythonのキャッシュファイルなど
-__pycache__/
-*.pyc
-.ipynb_checkpoints/
-venv/ # 仮想環境を使用している場合
